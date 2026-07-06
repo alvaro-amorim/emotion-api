@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Database/data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Storage
+storage/*
+!storage/.gitkeep
+!storage/audio/
+!storage/temp/
+!storage/processed/
+!storage/exports/
+storage/audio/*
+storage/temp/*
+storage/processed/*
+storage/exports/*
+!storage/audio/.gitkeep
+!storage/temp/.gitkeep
+!storage/processed/.gitkeep
+!storage/exports/.gitkeep
+
+# Local exports
+exports/*
+!exports/.gitkeep
+
+# Reference audio fixtures
+tests/fixtures/audio/*.m4a
+tests/fixtures/audio/*.mp3
+tests/fixtures/audio/*.wav
+tests/fixtures/audio/*.webm
+tests/fixtures/audio/*.ogg
+!tests/fixtures/audio/README.md
+!tests/fixtures/audio/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+.codex/
+
+# Test/cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

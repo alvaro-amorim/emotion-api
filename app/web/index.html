@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Audio Emotion API</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="page-header">
+        <div>
+          <h1>Audio Emotion API</h1>
+          <p>Interface local para testar análise emocional de áudio via API.</p>
+        </div>
+        <div class="api-status" aria-live="polite">
+          <span id="statusDot" class="status-dot status-idle"></span>
+          <span id="statusText">Status não verificado</span>
+          <button id="healthButton" type="button">Testar /health</button>
+        </div>
+      </header>
+
+      <section class="panel system-panel">
+        <div class="section-heading">
+          <h2>Status do sistema</h2>
+          <button id="refreshSystemStatusButton" type="button">Atualizar status</button>
+        </div>
+        <dl class="metrics-grid system-grid">
+          <div>
+            <dt>VersÃ£o da API</dt>
+            <dd id="systemVersion">-</dd>
+          </div>
+          <div>
+            <dt>Health</dt>
+            <dd id="systemHealth">-</dd>
+          </div>
+          <div>
+            <dt>TranscriÃ§Ã£o</dt>
+            <dd id="systemTranscription">-</dd>
+          </div>
+          <div>
+            <dt>Modelo Whisper</dt>
+            <dd id="systemWhisper">-</dd>
+          </div>
+          <div>
+            <dt>Cohere</dt>
+            <dd id="systemCohere">-</dd>
+          </div>
+          <div>
+            <dt>AnÃ¡lises</dt>
+            <dd id="systemAnalysesCount">-</dd>
+          </div>
+          <div>
+            <dt>Learning examples</dt>
+            <dd id="systemLearningCount">-</dd>
+          </div>
+          <div>
+            <dt>FFmpeg</dt>
+            <dd id="systemFfmpeg">-</dd>
+          </div>
+        </dl>
+        <p id="versionWarning" class="quality-warning hidden"></p>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>HistÃ³rico recente</h2>
+          <button id="refreshAnalysesButton" type="button">Atualizar histÃ³rico</button>
+        </div>
+        <div id="recentAnalysesList" class="records-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Learning examples</h2>
+          <button id="refreshLearningExamplesButton" type="button">Atualizar exemplos</button>
+        </div>
+        <div id="learningExamplesList" class="records-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Upload</h2>
+          <span>MP3, WAV, M4A, WEBM ou OGG</span>
+        </div>
+        <div class="upload-row">
+          <label class="file-picker">
+            <input
+              id="audioFile"
+              type="file"
+              accept=".mp3,.wav,.m4a,.webm,.ogg,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/webm,audio/ogg"
+            />
+            Escolher arquivo
+          </label>
+          <div id="selectedFileName" class="file-name">Nenhum arquivo selecionado</div>
+          <button id="analyzeFileButton" type="button" disabled>Analisar arquivo</button>
+        </div>
+        <label class="field compact-checkbox">
+          <input id="useExternalAi" type="checkbox" checked />
+          Usar Cohere quando estiver configurada
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Gravação</h2>
+          <span id="recordingSupport">Verificando suporte do navegador</span>
+        </div>
+        <div class="recording-controls">
+          <button id="startRecordingButton" type="button">Iniciar gravação</button>
+          <button id="stopRecordingButton" type="button" disabled>Parar gravação</button>
+          <div id="recordingTimer" class="timer">00:00</div>
+        </div>
+        <audio id="recordedAudio" controls class="recorded-audio"></audio>
+        <button id="analyzeRecordingButton" type="button" disabled>Analisar gravação</button>
+      </section>
+
+      <section id="messageArea" class="message" role="status" aria-live="polite"></section>
+
+      <section id="resultSection" class="panel hidden">
+        <div class="section-heading">
+          <h2>Resultado</h2>
+          <span id="analysisIdText"></span>
+        </div>
+
+        <div class="mock-status-banner">
+          <strong>Transcrição real ativa.</strong>
+          <span>Análise emocional interpretativa ativa. O resultado não é certeza absoluta.</span>
+        </div>
+
+        <div class="result-block">
+          <div class="section-heading compact-heading">
+            <h3>Métricas acústicas reais</h3>
+            <span id="processingStatusText"></span>
+          </div>
+          <dl class="metrics-grid">
+            <div>
+              <dt>Duração</dt>
+              <dd id="metricDuration"></dd>
+            </div>
+            <div>
+              <dt>Sample rate</dt>
+              <dd id="metricSampleRate"></dd>
+            </div>
+            <div>
+              <dt>Volume médio</dt>
+              <dd id="metricAvgVolume"></dd>
+            </div>
+            <div>
+              <dt>Pico de volume</dt>
+              <dd id="metricPeakVolume"></dd>
+            </div>
+            <div>
+              <dt>Variação</dt>
+              <dd id="metricVariance"></dd>
+            </div>
+            <div>
+              <dt>Dynamic range</dt>
+              <dd id="metricDynamicRange"></dd>
+            </div>
+            <div>
+              <dt>Silêncios/pausas</dt>
+              <dd id="metricSilenceCount"></dd>
+            </div>
+            <div>
+              <dt>Tempo em silêncio</dt>
+              <dd id="metricTotalSilence"></dd>
+            </div>
+            <div>
+              <dt>Maior silêncio</dt>
+              <dd id="metricLongestSilence"></dd>
+            </div>
+            <div>
+              <dt>Proporção de silêncio</dt>
+              <dd id="metricSilenceRatio"></dd>
+            </div>
+            <div>
+              <dt>Fala estimada</dt>
+              <dd id="metricSpeechDuration"></dd>
+            </div>
+            <div>
+              <dt>Picos</dt>
+              <dd id="metricPeakCount"></dd>
+            </div>
+          </dl>
+          <div id="audioQualityWarning" class="quality-warning hidden"></div>
+          <h4>Principais picos</h4>
+          <ul id="peakEvents" class="observations"></ul>
+        </div>
+
+        <div class="result-block">
+          <div class="section-heading compact-heading">
+            <h3>Transcrição real</h3>
+            <span id="transcriptionStatusText"></span>
+          </div>
+          <p id="transcriptionText" class="transcription-text"></p>
+          <dl class="metrics-grid transcription-metrics">
+            <div>
+              <dt>Motor</dt>
+              <dd id="transcriptionEngine"></dd>
+            </div>
+            <div>
+              <dt>Modelo</dt>
+              <dd id="transcriptionModel"></dd>
+            </div>
+            <div>
+              <dt>Idioma</dt>
+              <dd id="transcriptionLanguage"></dd>
+            </div>
+            <div>
+              <dt>Palavras</dt>
+              <dd id="wordCount"></dd>
+            </div>
+            <div>
+              <dt>Palavras/min</dt>
+              <dd id="wordsPerMinute"></dd>
+            </div>
+            <div>
+              <dt>Ritmo</dt>
+              <dd id="speechRateLabel"></dd>
+            </div>
+            <div>
+              <dt>Duração média/palavra</dt>
+              <dd id="averageWordDuration"></dd>
+            </div>
+          </dl>
+          <h4>Segmentos</h4>
+          <ul id="transcriptionSegments" class="observations"></ul>
+          <h4>Palavras com timestamps</h4>
+          <ul id="transcriptionWords" class="observations compact-list"></ul>
+        </div>
+
+        <div class="result-grid">
+          <div class="result-block result-main">
+            <h3>Transcrição comentada</h3>
+            <p id="annotatedText" class="annotated-text"></p>
+          </div>
+
+          <div class="result-block">
+            <h3>Resumo emocional</h3>
+            <dl class="summary-list">
+              <div>
+                <dt>Fonte</dt>
+                <dd id="emotionSource"></dd>
+              </div>
+              <div>
+                <dt>Modelo</dt>
+                <dd id="emotionModel"></dd>
+              </div>
+              <div>
+                <dt>Emoção primária</dt>
+                <dd id="primaryEmotion"></dd>
+              </div>
+              <div>
+                <dt>Emoções secundárias</dt>
+                <dd id="secondaryEmotions"></dd>
+              </div>
+              <div>
+                <dt>Emoção implícita</dt>
+                <dd id="implicitEmotion"></dd>
+              </div>
+              <div>
+                <dt>Tom</dt>
+                <dd id="emotionalTone"></dd>
+              </div>
+              <div>
+                <dt>Intenção</dt>
+                <dd id="emotionIntention"></dd>
+              </div>
+              <div>
+                <dt>Calma</dt>
+                <dd id="calmness"></dd>
+              </div>
+              <div>
+                <dt>Urgência</dt>
+                <dd id="urgency"></dd>
+              </div>
+              <div>
+                <dt>Tensão</dt>
+                <dd id="tension"></dd>
+              </div>
+              <div>
+                <dt>Confiança</dt>
+                <dd id="confidence"></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+        <div class="result-block">
+          <h3>Observações importantes</h3>
+          <ul id="importantObservations" class="observations"></ul>
+        </div>
+
+        <div class="result-block">
+          <h3>Evidências da análise</h3>
+          <ul id="emotionEvidence" class="observations"></ul>
+        </div>
+
+        <div class="result-block">
+          <h3>Exemplos locais usados</h3>
+          <ul id="learningExamplesUsed" class="observations"></ul>
+        </div>
+
+        <details class="debug-details">
+          <summary>Debug da análise emocional</summary>
+          <dl class="summary-list debug-summary">
+            <div>
+              <dt>Provider pedido</dt>
+              <dd id="debugProvider"></dd>
+            </div>
+            <div>
+              <dt>Cohere habilitada</dt>
+              <dd id="debugCohereEnabled"></dd>
+            </div>
+            <div>
+              <dt>Cohere tentada</dt>
+              <dd id="debugCohereAttempted"></dd>
+            </div>
+            <div>
+              <dt>Cohere sucesso</dt>
+              <dd id="debugCohereSuccess"></dd>
+            </div>
+            <div>
+              <dt>Fallback usado</dt>
+              <dd id="debugFallbackUsed"></dd>
+            </div>
+            <div>
+              <dt>Motivo fallback</dt>
+              <dd id="debugFallbackReason"></dd>
+            </div>
+            <div>
+              <dt>Fallback local</dt>
+              <dd id="comparisonLocalPrimary"></dd>
+            </div>
+            <div>
+              <dt>Cohere</dt>
+              <dd id="comparisonCoherePrimary"></dd>
+            </div>
+            <div>
+              <dt>Concordância</dt>
+              <dd id="comparisonAgreement"></dd>
+            </div>
+            <div>
+              <dt>Exemplos no contexto</dt>
+              <dd id="debugLearningExamplesCount"></dd>
+            </div>
+            <div>
+              <dt>Exemplos encontrados</dt>
+              <dd id="debugLearningExamplesFound"></dd>
+            </div>
+            <div>
+              <dt>Min. similaridade</dt>
+              <dd id="debugLearningMinSimilarity"></dd>
+            </div>
+            <div>
+              <dt>Aprendizado aplicado</dt>
+              <dd id="debugLearningApplied"></dd>
+            </div>
+            <div>
+              <dt>Mudou resultado local</dt>
+              <dd id="debugLearningChanged"></dd>
+            </div>
+          </dl>
+          <h4>Influencia do aprendizado</h4>
+          <p id="debugLearningSummary" class="debug-note"></p>
+          <h4>Top exemplos parecidos</h4>
+          <ul id="debugTopLearningExamples" class="observations"></ul>
+          <h4>Ajustes por aprendizado</h4>
+          <ul id="debugLearningAdjustments" class="observations"></ul>
+          <h4>Fatores finais</h4>
+          <ul id="debugDecisionFactors" class="observations"></ul>
+          <h4>Pesos e scores principais</h4>
+          <pre id="debugHeuristicSnapshot" class="debug-pre"></pre>
+          <h4>Diferenças</h4>
+          <ul id="comparisonDifferences" class="observations"></ul>
+          <h4>Warnings de debug</h4>
+          <ul id="debugWarnings" class="observations"></ul>
+        </details>
+
+        <div class="result-block">
+          <h3>Avisos</h3>
+          <ul id="qualityWarnings" class="observations"></ul>
+        </div>
+
+        <div class="result-block">
+          <h3>Contexto recomendado</h3>
+          <p id="recommendedContext"></p>
+        </div>
+
+        <details class="json-details">
+          <summary>JSON completo</summary>
+          <pre id="fullJson"></pre>
+        </details>
+      </section>
+
+      <section id="feedbackSection" class="panel hidden">
+        <div class="section-heading">
+          <h2>Feedback</h2>
+          <span>Ajuda a melhorar análises futuras</span>
+        </div>
+        <div class="feedback-rating" role="group" aria-label="Avaliação da análise">
+          <button class="rating-button" type="button" data-rating="positive" data-correct="true">
+            Análise correta
+          </button>
+          <button class="rating-button" type="button" data-rating="neutral" data-correct="false">
+            Parcialmente correta
+          </button>
+          <button class="rating-button" type="button" data-rating="negative" data-correct="false">
+            Análise errada
+          </button>
+        </div>
+        <label class="field">
+          Emoção correta
+          <input id="correctedEmotion" type="text" placeholder="Ex.: ansiedade leve" />
+        </label>
+        <label class="field">
+          Tom correto
+          <input id="correctedTone" type="text" placeholder="Ex.: calmo, mas inseguro" />
+        </label>
+        <label class="field">
+          Motivo da correção
+          <input id="correctionReason" type="text" placeholder="Ex.: A fala estava pausada, não urgente." />
+        </label>
+        <label class="field">
+          Observações do usuário
+          <textarea
+            id="feedbackNotes"
+            rows="4"
+            placeholder="Ex.: O tom era mais de dúvida e preocupação."
+          ></textarea>
+        </label>
+        <label class="field compact-checkbox">
+          <input id="approvedForLearning" type="checkbox" checked />
+          Aprovar para aprendizado local
+        </label>
+        <button id="sendFeedbackButton" type="button">Enviar feedback</button>
+        <p id="feedbackMessage" class="feedback-message" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
