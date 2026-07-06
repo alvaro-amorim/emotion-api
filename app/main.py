@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
         debug=settings.app_debug,
         lifespan=lifespan,
     )
+    _configure_cors(app)
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(audio_router)
@@ -44,6 +46,23 @@ def create_app() -> FastAPI:
         return FileResponse(WEB_DIR / "index.html")
 
     return app
+
+
+def _configure_cors(app: FastAPI) -> None:
+    settings = get_settings()
+    origins = list(settings.allowed_client_origins)
+    if settings.require_api_key:
+        origins = [origin for origin in origins if origin != "*"]
+    if not origins:
+        return
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Content-Type", settings.api_key_header_name],
+    )
 
 
 app = create_app()

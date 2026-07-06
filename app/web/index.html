@@ -61,6 +61,11 @@
           </div>
         </dl>
         <p id="versionWarning" class="quality-warning hidden"></p>
+        <label class="field api-key-field">
+          API Key local
+          <input id="localApiKey" type="password" autocomplete="off" placeholder="Opcional para API protegida" />
+        </label>
+        <button id="saveLocalApiKeyButton" type="button">Salvar API Key local</button>
       </section>
 
       <section class="panel">
@@ -225,6 +230,34 @@
               <dd id="averageWordDuration"></dd>
             </div>
           </dl>
+          <h4>Qualidade da transcriÃ§Ã£o</h4>
+          <dl class="metrics-grid transcription-metrics">
+            <div>
+              <dt>Idioma usado</dt>
+              <dd id="transcriptionQualityLanguage"></dd>
+            </div>
+            <div>
+              <dt>Ãudio otimizado</dt>
+              <dd id="transcriptionQualityOptimized"></dd>
+            </div>
+            <div>
+              <dt>ConfianÃ§a mÃ©dia</dt>
+              <dd id="transcriptionQualityConfidence"></dd>
+            </div>
+            <div>
+              <dt>Baixa confianÃ§a</dt>
+              <dd id="transcriptionQualityLowConfidence"></dd>
+            </div>
+            <div>
+              <dt>Arquivo usado</dt>
+              <dd id="transcriptionQualityAudioPath"></dd>
+            </div>
+            <div>
+              <dt>Fallback</dt>
+              <dd id="transcriptionQualityFallback"></dd>
+            </div>
+          </dl>
+          <ul id="transcriptionQualityWarnings" class="observations"></ul>
           <h4>Segmentos</h4>
           <ul id="transcriptionSegments" class="observations"></ul>
           <h4>Palavras com timestamps</h4>

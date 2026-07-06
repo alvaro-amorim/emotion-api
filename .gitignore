@@ -40,6 +40,7 @@ exports/*
 !exports/.gitkeep
 
 # Reference audio fixtures
+!tests/fixtures/audio/
 tests/fixtures/audio/*.m4a
 tests/fixtures/audio/*.mp3
 tests/fixtures/audio/*.wav

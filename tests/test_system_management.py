@@ -136,4 +136,6 @@ def test_env_and_local_exports_are_ignored():
     assert "\n.venv/" in f"\n{gitignore}"
     assert "\ndata/" in f"\n{gitignore}"
     assert "\nexports/*" in f"\n{gitignore}"
-    assert "\n!tests/fixtures/audio/*.m4a" in f"\n{gitignore}"
+    assert "\ntests/fixtures/audio/*.m4a" in f"\n{gitignore}"
+    assert "\ntests/fixtures/audio/*.mp3" in f"\n{gitignore}"
+    assert "\n!tests/fixtures/audio/README.md" in f"\n{gitignore}"

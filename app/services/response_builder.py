@@ -10,6 +10,7 @@ from app.api.schemas import (
     LearningExampleReference,
     ProcessingStatus,
     Transcription,
+    TranscriptionQuality,
 )
 from app.core.config import Settings, get_settings
 from app.services.audio_loader import StoredAudio
@@ -22,6 +23,7 @@ def build_analysis_response(
     stored_audio: StoredAudio,
     acoustic_metrics: AcousticMetrics,
     transcription: Transcription,
+    transcription_quality: TranscriptionQuality,
     language: str,
     use_external_ai: bool,
     interpretation_style: InterpretationStyle,
@@ -68,6 +70,7 @@ def build_analysis_response(
         ),
         acoustic_metrics=acoustic_metrics,
         transcription=transcription,
+        transcription_quality=transcription_quality,
         annotated_transcription=emotion_analysis.annotated_transcription,
         prosody_summary=prosody_summary,
         emotion_summary=emotion_analysis.emotion_summary,

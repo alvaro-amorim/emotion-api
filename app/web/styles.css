@@ -277,6 +277,14 @@ button:disabled {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.api-key-field {
+  margin-top: 14px;
+}
+
+.api-key-field input {
+  max-width: 420px;
+}
+
 .records-list {
   display: grid;
   gap: 10px;

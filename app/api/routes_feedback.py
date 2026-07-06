@@ -8,11 +8,12 @@ from app.api.schemas import (
     LearningExampleUpdateRequest,
     LearningExamplesListResponse,
 )
+from app.core.security import require_api_key
 from app.db.session import get_session
 from app.services.feedback_service import register_feedback
 from app.services.learning_service import get_learning_examples, patch_learning_example
 
-router = APIRouter(prefix="/v1", tags=["feedback"])
+router = APIRouter(prefix="/v1", tags=["feedback"], dependencies=[Depends(require_api_key)])
 
 
 @router.post(

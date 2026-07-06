@@ -23,6 +23,11 @@ def test_analyze_audio_returns_real_acoustics_and_real_transcription_contract(cl
     assert payload["transcription"]["word_count"] > 0
     assert payload["transcription"]["words_per_minute"] > 0
     assert payload["transcription"]["estimated_speech_rate_label"] in {"slow", "normal", "fast"}
+    assert payload["transcription_quality"]["language_used"] == "pt"
+    assert payload["transcription_quality"]["engine"] == "faster-whisper"
+    assert payload["transcription_quality"]["model"] == "tiny"
+    assert isinstance(payload["transcription_quality"]["used_optimized_audio"], bool)
+    assert isinstance(payload["transcription_quality"]["warnings"], list)
     assert "[emoção:" in payload["annotated_transcription"]["text"]
     assert payload["prosody_summary"]["emphasis_words"]
     assert payload["emotion_summary"]["primary_emotion"] != "mocked"

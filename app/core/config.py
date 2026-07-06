@@ -50,6 +50,10 @@ def _extensions(value: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(extensions))
 
 
+def _csv(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -59,6 +63,14 @@ class Settings(BaseModel):
     app_version: str
 
     database_url: str
+
+    require_api_key: bool = False
+    local_api_key: str = "dev-local-key-change-me"
+    api_key_header_name: str = "X-API-Key"
+    allowed_client_origins: tuple[str, ...] = (
+        "http://127.0.0.1:8020",
+        "http://localhost:8020",
+    )
 
     cohere_api_key: str
     cohere_model: str
@@ -97,6 +109,11 @@ class Settings(BaseModel):
     whisper_model_size: str
     whisper_device: str
     whisper_compute_type: str
+    whisper_beam_size: int
+    whisper_best_of: int
+    whisper_temperature: float
+    whisper_vad_filter: bool
+    whisper_condition_on_previous_text: bool
 
     storage_dir: str
     audio_storage_dir: str
@@ -122,6 +139,15 @@ def get_settings() -> Settings:
         app_debug=_bool(_env("APP_DEBUG", "DEBUG", default="true"), default=True),
         app_version=_env("APP_VERSION", default="0.5.0"),
         database_url=_env("DATABASE_URL", default="sqlite:///./audio_emotion.db"),
+        require_api_key=_bool(_env("REQUIRE_API_KEY", default="false"), default=False),
+        local_api_key=_env("LOCAL_API_KEY", default="dev-local-key-change-me"),
+        api_key_header_name=_env("API_KEY_HEADER_NAME", default="X-API-Key"),
+        allowed_client_origins=_csv(
+            _env(
+                "ALLOWED_CLIENT_ORIGINS",
+                default="http://127.0.0.1:8020,http://localhost:8020",
+            )
+        ),
         cohere_api_key=_env("COHERE_API_KEY", default=""),
         cohere_model=_env("COHERE_MODEL", "COHERE_CHAT_MODEL", default="command-a-03-2025"),
         cohere_chat_model=_env("COHERE_CHAT_MODEL", "COHERE_MODEL", default="command-a-03-2025"),
@@ -221,6 +247,14 @@ def get_settings() -> Settings:
         whisper_model_size=_env("WHISPER_MODEL_SIZE", default="tiny"),
         whisper_device=_env("WHISPER_DEVICE", default="cpu"),
         whisper_compute_type=_env("WHISPER_COMPUTE_TYPE", default="int8"),
+        whisper_beam_size=_int(_env("WHISPER_BEAM_SIZE", default="5"), default=5),
+        whisper_best_of=_int(_env("WHISPER_BEST_OF", default="5"), default=5),
+        whisper_temperature=_float(_env("WHISPER_TEMPERATURE", default="0"), default=0.0),
+        whisper_vad_filter=_bool(_env("WHISPER_VAD_FILTER", default="true"), default=True),
+        whisper_condition_on_previous_text=_bool(
+            _env("WHISPER_CONDITION_ON_PREVIOUS_TEXT", default="false"),
+            default=False,
+        ),
         storage_dir=storage_dir,
         audio_storage_dir=_env("AUDIO_STORAGE_DIR", "TEMP_AUDIO_DIR", default=f"{storage_dir}/audio"),
         processed_audio_dir=_env(

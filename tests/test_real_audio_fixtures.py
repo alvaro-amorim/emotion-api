@@ -13,16 +13,36 @@ FIXTURE_NAMES = [
 ]
 
 
-def test_reference_audio_fixtures_exist():
+def _fixture_path(fixture_name: str) -> Path:
+    return FIXTURE_DIR / fixture_name
+
+
+def _require_fixture(fixture_name: str) -> Path:
+    fixture_path = _fixture_path(fixture_name)
+    if not fixture_path.exists() or fixture_path.stat().st_size == 0:
+        pytest.skip(
+            "Fixture real de audio ausente. "
+            "Adicione os arquivos localmente em tests/fixtures/audio para rodar este teste."
+        )
+    return fixture_path
+
+
+def test_reference_audio_fixtures_exist_or_skip_cleanly():
+    missing = [fixture_name for fixture_name in FIXTURE_NAMES if not _fixture_path(fixture_name).exists()]
+    if missing:
+        pytest.skip(
+            "Fixtures reais de audio nao sao versionadas por seguranca: "
+            + ", ".join(missing)
+        )
+
     for fixture_name in FIXTURE_NAMES:
-        fixture_path = FIXTURE_DIR / fixture_name
-        assert fixture_path.exists(), f"Fixture ausente: {fixture_path}"
+        fixture_path = _fixture_path(fixture_name)
         assert fixture_path.stat().st_size > 0
 
 
 @pytest.mark.parametrize("fixture_name", FIXTURE_NAMES)
 def test_m4a_reference_fixture_is_accepted(client, fixture_name):
-    fixture_path = FIXTURE_DIR / fixture_name
+    fixture_path = _require_fixture(fixture_name)
     with fixture_path.open("rb") as audio_file:
         response = client.post(
             "/v1/analyze-audio",
@@ -54,7 +74,7 @@ def test_m4a_reference_fixture_is_accepted(client, fixture_name):
 
 
 def test_feedback_still_works_after_reference_fixture_analysis(client):
-    fixture_path = FIXTURE_DIR / "ptbr_01_calmo_normal.m4a"
+    fixture_path = _require_fixture("ptbr_01_calmo_normal.m4a")
     with fixture_path.open("rb") as audio_file:
         analysis_response = client.post(
             "/v1/analyze-audio",

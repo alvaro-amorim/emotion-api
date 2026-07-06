@@ -71,14 +71,25 @@ Copy-Item .env.example .env
 O `.env` real deve ser criado e alterado manualmente. A aplicacao nao deve sobrescrever esse arquivo. Nunca versionar `COHERE_API_KEY` ou qualquer segredo; `.env` fica no `.gitignore`.
 
 ```env
-APP_VERSION=0.5.0
+APP_VERSION=0.5.6
 DEFAULT_LANGUAGE=pt-BR
+
+REQUIRE_API_KEY=false
+LOCAL_API_KEY=dev-local-key-change-me
+API_KEY_HEADER_NAME=X-API-Key
+ALLOWED_CLIENT_ORIGINS=http://127.0.0.1:8020,http://localhost:8020
+AUDIO_EMOTION_API_URL=http://127.0.0.1:8014
 
 TRANSCRIPTION_PROVIDER=local
 LOCAL_TRANSCRIPTION_ENGINE=faster-whisper
 WHISPER_MODEL_SIZE=tiny
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
+WHISPER_BEAM_SIZE=5
+WHISPER_BEST_OF=5
+WHISPER_TEMPERATURE=0
+WHISPER_VAD_FILTER=true
+WHISPER_CONDITION_ON_PREVIOUS_TEXT=false
 
 USE_COHERE=true
 COHERE_API_KEY=
@@ -185,6 +196,7 @@ A interface permite:
 - visualizar status do sistema;
 - visualizar historico recente de analises;
 - aprovar ou desaprovar `learning_examples`;
+- preencher uma API Key local opcional para consumir endpoints protegidos;
 - enviar arquivo `.mp3`, `.wav`, `.m4a`, `.webm` ou `.ogg`;
 - gravar áudio pelo navegador usando `MediaRecorder`;
 - escolher se deve tentar Cohere quando configurada;
@@ -223,6 +235,7 @@ Transcrição:
 - palavras por minuto;
 - ritmo estimado;
 - duração média por palavra quando houver timestamps.
+- qualidade da transcrição, incluindo idioma usado, confiança média, uso de áudio otimizado e warnings.
 
 Análise emocional:
 
@@ -239,6 +252,35 @@ Análise emocional:
 - transcrição comentada com `[emoção: ... | tom: ... | observação: ...]`.
 
 A análise emocional é probabilística e interpretativa. Ela não deve ser tratada como certeza absoluta.
+
+## Melhorando Qualidade da Transcrição
+
+O pipeline mantém dois arquivos WAV processados:
+
+- `*_16khz_mono.wav`: usado para métricas acústicas reais, sem filtros extras de inteligibilidade.
+- `*_16khz_mono_transcription.wav`: usado apenas para transcrição, com filtros leves de FFmpeg (`highpass`, `lowpass` e `dynaudnorm`) para reduzir graves desnecessários e estabilizar volume.
+
+Se a geração do áudio otimizado falhar, a API usa automaticamente o WAV padrão e informa isso em `transcription_quality.fallback_reason`.
+
+O idioma `DEFAULT_LANGUAGE=pt-BR` é normalizado para `pt` antes de chamar o `faster-whisper`, que espera códigos de idioma curtos.
+
+Parâmetros ajustáveis do `faster-whisper`:
+
+```env
+WHISPER_BEAM_SIZE=5
+WHISPER_BEST_OF=5
+WHISPER_TEMPERATURE=0
+WHISPER_VAD_FILTER=true
+WHISPER_CONDITION_ON_PREVIOUS_TEXT=false
+```
+
+Para melhorar a captura:
+
+- fale perto do microfone, sem encostar nele;
+- evite ruído, eco e música de fundo;
+- evite gritar ou saturar o microfone, pois clipping perto de 0 dB prejudica a transcrição;
+- prefira microfone externo quando possível;
+- em gravações pelo navegador, confira os warnings de `transcription_quality` quando houver muito silêncio, áudio muito curto ou baixa confiança.
 
 ## Status no JSON
 
@@ -334,6 +376,67 @@ Com fallback local:
 - treinamento próprio;
 - ajuste automático de pesos.
 
+## Consumindo a Audio Emotion API com API Key
+
+Esta camada simula o consumo futuro por outro app local. Ela e opcional e serve apenas para desenvolvimento; ainda nao e autenticacao comercial real, multiusuario, billing ou rate limit.
+
+No `.env`, habilite:
+
+```env
+REQUIRE_API_KEY=true
+LOCAL_API_KEY=dev-local-key-change-me
+API_KEY_HEADER_NAME=X-API-Key
+ALLOWED_CLIENT_ORIGINS=http://127.0.0.1:8020,http://localhost:8020
+AUDIO_EMOTION_API_URL=http://127.0.0.1:8014
+```
+
+Rode a API em uma porta dedicada:
+
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8014
+```
+
+Exemplo no Windows `cmd`/PowerShell com `curl.exe`:
+
+```cmd
+curl.exe -X POST "http://127.0.0.1:8014/v1/analyze-audio" ^
+  -H "X-API-Key: dev-local-key-change-me" ^
+  -F "file=@tests/fixtures/audio/ptbr_01_calmo_normal.m4a"
+```
+
+Resposta resumida esperada:
+
+```json
+{
+  "analysis_id": "uuid",
+  "status": {
+    "acoustic_metrics_status": "real",
+    "transcription_status": "real",
+    "emotion_status": "real ou fallback_local"
+  },
+  "transcription": {
+    "text": "texto transcrito..."
+  },
+  "emotion_summary": {
+    "primary_emotion": "calma",
+    "confidence_score": 0.82
+  },
+  "recommended_context_for_ai_agent": "contexto recomendado..."
+}
+```
+
+Quando `REQUIRE_API_KEY=true`, endpoints sensiveis exigem `X-API-Key`: analise de audio, consulta de analises, debug, contexto de aprendizado, feedback e gestao/listagem de `learning_examples`. Continuam publicos: `GET /`, `GET /health`, `GET /v1/system/status`, arquivos estaticos, Swagger/OpenAPI.
+
+Para usar com um app cliente demo local em outra porta, mantenha a API em `http://127.0.0.1:8014` e inclua a origem do cliente em `ALLOWED_CLIENT_ORIGINS`, por exemplo `http://127.0.0.1:8020`.
+
+O script de smoke para validar consumo externo:
+
+```bash
+python scripts/smoke_api_key_client.py
+```
+
+Ele usa `AUDIO_EMOTION_API_URL` quando definida, ou `http://127.0.0.1:8014` por padrao, envia a fixture `ptbr_01_calmo_normal.m4a` com `X-API-Key` e imprime `analysis_id`, status de transcricao, status emocional, emocao primaria e contexto recomendado. O script nunca imprime a chave.
+
 ## Enviar Áudio via curl
 
 ```bash
@@ -413,7 +516,7 @@ curl "http://127.0.0.1:8013/v1/analyses/{analysis_id}/learning-context"
 - Exemplos locais: tabela `learning_examples`, incluindo previsao original, emocoes/tom originais, correcao do usuario, tom corrigido, motivo da correcao, observacoes, trecho de transcricao, snapshot acustico e snapshot de ritmo.
 - Exportacoes locais: `exports/learning_dataset.jsonl`.
 
-`data/`, `storage/`, `exports/`, `.env` e `.venv` ficam fora do Git. As fixtures em `tests/fixtures/audio/*.m4a` sao explicitamente preservadas.
+`data/`, `storage/`, `exports/`, `.env`, `.venv` e arquivos reais de audio em `tests/fixtures/audio/*` ficam fora do Git. Mantenha apenas `tests/fixtures/audio/README.md` versionado.
 
 ## Exportar Dataset Local
 
@@ -485,6 +588,8 @@ Documentação:
 tests/fixtures/audio/README.md
 ```
 
+Esses arquivos devem ser adicionados localmente e nao sao versionados por padrao, pois podem conter voz real. Se eles nao existirem, `pytest -m real_audio` pula os testes correspondentes de forma controlada.
+
 Validar as três fixtures com pipeline real e transcrição real local, sem depender de servidor externo:
 
 ```bash
@@ -495,6 +600,14 @@ Validar as três fixtures forçando fallback local sem alterar o `.env`:
 
 ```bash
 python scripts/validate_audio_fixtures.py --no-cohere
+```
+
+Quando `REQUIRE_API_KEY=true`, os scripts internos leem `LOCAL_API_KEY` do `.env` e enviam o header configurado em `API_KEY_HEADER_NAME`, sem imprimir a chave no terminal.
+
+Validar consumo HTTP externo com API Key:
+
+```bash
+python scripts/smoke_api_key_client.py
 ```
 
 O script imprime metricas acusticas, WPM, status da transcricao, fonte da emocao, emocao primaria, urgencia, calma, confianca, fallback local, resultado da Cohere quando houver, nivel de concordancia, exemplos encontrados/usados, influencia do aprendizado, top exemplos e trecho da transcricao comentada. Os textos esperados sao aproximados.

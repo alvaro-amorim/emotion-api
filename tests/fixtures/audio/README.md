@@ -1,10 +1,14 @@
 # Audio Fixtures
 
-Estes arquivos sao fixtures reais em portugues brasileiro para validar o pipeline local da Audio Emotion API.
+Esta pasta pode receber fixtures reais em portugues brasileiro para validar o pipeline local da Audio Emotion API.
+
+Por seguranca e privacidade, arquivos de audio reais nao sao versionados. Adicione-os apenas localmente quando quiser rodar validacoes manuais ou testes marcados com `real_audio`.
 
 Os textos esperados abaixo sao aproximados. A transcricao automatica pode variar conforme modelo do `faster-whisper`, ruido, volume, codecs e versao das dependencias.
 
 ## Arquivos
+
+Os nomes esperados pelos scripts/testes locais sao:
 
 ### `ptbr_01_calmo_normal.m4a`
 
@@ -61,4 +65,10 @@ Para validacao real com o modelo local, rode:
 python scripts/validate_audio_fixtures.py
 ```
 
-Os testes automatizados podem usar estas fixtures com transcricao mockada para manter `pytest` rapido e evitar download de modelo durante a suite normal.
+Os testes marcados com `real_audio` pulam automaticamente quando os arquivos locais nao existem:
+
+```bash
+pytest -m real_audio
+```
+
+Os testes automatizados usam transcricao mockada para manter `pytest` rapido e evitar download de modelo durante a suite normal.

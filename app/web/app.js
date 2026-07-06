@@ -24,6 +24,8 @@ const elements = {
   systemLearningCount: document.getElementById("systemLearningCount"),
   systemFfmpeg: document.getElementById("systemFfmpeg"),
   versionWarning: document.getElementById("versionWarning"),
+  localApiKey: document.getElementById("localApiKey"),
+  saveLocalApiKeyButton: document.getElementById("saveLocalApiKeyButton"),
   refreshAnalysesButton: document.getElementById("refreshAnalysesButton"),
   recentAnalysesList: document.getElementById("recentAnalysesList"),
   refreshLearningExamplesButton: document.getElementById("refreshLearningExamplesButton"),
@@ -65,6 +67,13 @@ const elements = {
   wordsPerMinute: document.getElementById("wordsPerMinute"),
   speechRateLabel: document.getElementById("speechRateLabel"),
   averageWordDuration: document.getElementById("averageWordDuration"),
+  transcriptionQualityLanguage: document.getElementById("transcriptionQualityLanguage"),
+  transcriptionQualityOptimized: document.getElementById("transcriptionQualityOptimized"),
+  transcriptionQualityConfidence: document.getElementById("transcriptionQualityConfidence"),
+  transcriptionQualityLowConfidence: document.getElementById("transcriptionQualityLowConfidence"),
+  transcriptionQualityAudioPath: document.getElementById("transcriptionQualityAudioPath"),
+  transcriptionQualityFallback: document.getElementById("transcriptionQualityFallback"),
+  transcriptionQualityWarnings: document.getElementById("transcriptionQualityWarnings"),
   transcriptionSegments: document.getElementById("transcriptionSegments"),
   transcriptionWords: document.getElementById("transcriptionWords"),
   annotatedText: document.getElementById("annotatedText"),
@@ -125,6 +134,32 @@ function setMessage(text, type = "") {
 function setStatus(kind, text) {
   elements.statusDot.className = `status-dot status-${kind}`;
   elements.statusText.textContent = text;
+}
+
+function getApiKeyHeaders(extraHeaders = {}) {
+  const apiKey = elements.localApiKey.value.trim();
+  if (!apiKey) {
+    return { ...extraHeaders };
+  }
+  return { ...extraHeaders, "X-API-Key": apiKey };
+}
+
+function loadStoredApiKey() {
+  const storedKey = window.localStorage.getItem("audioEmotionLocalApiKey") || "";
+  elements.localApiKey.value = storedKey;
+}
+
+function saveStoredApiKey() {
+  const apiKey = elements.localApiKey.value.trim();
+  if (apiKey) {
+    window.localStorage.setItem("audioEmotionLocalApiKey", apiKey);
+    setMessage("API Key local salva neste navegador.", "success");
+  } else {
+    window.localStorage.removeItem("audioEmotionLocalApiKey");
+    setMessage("API Key local removida deste navegador.", "success");
+  }
+  loadRecentAnalyses();
+  loadLearningExamples();
 }
 
 function setLoading(isLoading, text = "Processando áudio") {
@@ -213,7 +248,9 @@ async function loadSystemStatus() {
 
 async function loadRecentAnalyses() {
   try {
-    const response = await fetch("/v1/analyses?limit=8");
+    const response = await fetch("/v1/analyses?limit=8", {
+      headers: getApiKeyHeaders(),
+    });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.detail || `HTTP ${response.status}`);
@@ -267,7 +304,9 @@ async function loadRecentAnalyses() {
 
 async function loadLearningExamples() {
   try {
-    const response = await fetch("/v1/learning/examples?limit=10");
+    const response = await fetch("/v1/learning/examples?limit=10", {
+      headers: getApiKeyHeaders(),
+    });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.detail || `HTTP ${response.status}`);
@@ -326,7 +365,7 @@ async function updateLearningExampleApproval(exampleId, approved) {
   try {
     const response = await fetch(`/v1/learning/examples/${exampleId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getApiKeyHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ approved_for_reuse: approved }),
     });
     const payload = await response.json();
@@ -380,6 +419,7 @@ async function analyzeAudio(file) {
   try {
     const response = await fetch("/v1/analyze-audio", {
       method: "POST",
+      headers: getApiKeyHeaders(),
       body: formData,
     });
     const payload = await response.json();
@@ -407,7 +447,7 @@ function renderAnalysis(payload) {
   elements.feedbackSection.classList.remove("hidden");
   elements.analysisIdText.textContent = `analysis_id: ${payload.analysis_id}`;
   renderAcousticMetrics(metrics, status);
-  renderTranscription(payload.transcription || {}, status);
+  renderTranscription(payload.transcription || {}, payload.transcription_quality || {}, status);
   elements.annotatedText.textContent = payload.annotated_transcription?.text || "";
   elements.emotionSource.textContent = status.emotion_analysis_source || emotion.analysis_source || "-";
   elements.emotionModel.textContent = emotion.analysis_model || "-";
@@ -549,7 +589,7 @@ function renderEmotionDebug(debug, comparison) {
   replaceList(elements.debugWarnings, debug.warnings || [], "Nenhum warning de debug.");
 }
 
-function renderTranscription(transcription, status) {
+function renderTranscription(transcription, quality, status) {
   elements.transcriptionStatusText.textContent = [
     `status: ${status.transcription_status || "-"}`,
     `emoção: ${status.emotion_status || "-"}`,
@@ -570,6 +610,21 @@ function renderTranscription(transcription, status) {
     typeof transcription.average_word_duration_ms === "number"
       ? `${transcription.average_word_duration_ms.toFixed(0)} ms`
       : "-";
+  elements.transcriptionQualityLanguage.textContent =
+    quality.language_used || transcription.detected_language || "-";
+  elements.transcriptionQualityOptimized.textContent = yesNo(quality.used_optimized_audio);
+  elements.transcriptionQualityConfidence.textContent =
+    typeof quality.avg_segment_confidence === "number"
+      ? `${Math.round(quality.avg_segment_confidence * 100)}%`
+      : "-";
+  elements.transcriptionQualityLowConfidence.textContent = yesNo(quality.low_confidence);
+  elements.transcriptionQualityAudioPath.textContent = quality.audio_path || "-";
+  elements.transcriptionQualityFallback.textContent = quality.fallback_reason || "-";
+  replaceList(
+    elements.transcriptionQualityWarnings,
+    quality.warnings || [],
+    "Nenhum aviso especifico de transcricao.",
+  );
 
   const segmentItems = (transcription.segments || []).map((segment) => {
     const li = document.createElement("li");
@@ -695,7 +750,7 @@ async function sendFeedback() {
   try {
     const response = await fetch(`/v1/analyses/${state.analysisId}/feedback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getApiKeyHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     const responsePayload = await response.json();
@@ -773,6 +828,7 @@ elements.healthButton.addEventListener("click", checkHealth);
 elements.refreshSystemStatusButton.addEventListener("click", loadSystemStatus);
 elements.refreshAnalysesButton.addEventListener("click", loadRecentAnalyses);
 elements.refreshLearningExamplesButton.addEventListener("click", loadLearningExamples);
+elements.saveLocalApiKeyButton.addEventListener("click", saveStoredApiKey);
 elements.audioFile.addEventListener("change", (event) => {
   const [file] = event.target.files;
   state.selectedFile = file || null;
@@ -801,6 +857,7 @@ elements.sendFeedbackButton.addEventListener("click", sendFeedback);
 
 selectFeedback(document.querySelector(".rating-button"));
 initializeRecordingSupport();
+loadStoredApiKey();
 checkHealth();
 loadSystemStatus();
 loadRecentAnalyses();

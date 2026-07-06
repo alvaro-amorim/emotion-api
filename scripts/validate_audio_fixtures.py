@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 import logging
+import os
 import warnings
 from pathlib import Path
 
@@ -18,6 +19,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.main import app  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
 
 logging.basicConfig(level=logging.WARNING)
 for logger_name in ("faster_whisper", "httpx", "httpcore"):
@@ -31,10 +33,17 @@ FIXTURES = [
 ]
 
 
-def _post_audio(client: TestClient, path: Path, *, use_external_ai: bool) -> dict:
+def _post_audio(
+    client: TestClient,
+    path: Path,
+    *,
+    use_external_ai: bool,
+    headers: dict[str, str] | None = None,
+) -> dict:
     with path.open("rb") as audio_file:
         response = client.post(
             "/v1/analyze-audio",
+            headers=headers or {},
             files={"file": (path.name, audio_file, "audio/mp4")},
             data={
                 "language": "pt-BR",
@@ -47,9 +56,21 @@ def _post_audio(client: TestClient, path: Path, *, use_external_ai: bool) -> dic
     return response.json()
 
 
+def _api_key_headers() -> dict[str, str]:
+    settings = get_settings()
+    if not settings.require_api_key:
+        return {}
+
+    api_key = os.getenv("LOCAL_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("REQUIRE_API_KEY=true, mas LOCAL_API_KEY nao esta configurado.")
+    return {settings.api_key_header_name: api_key}
+
+
 def _print_summary(path: Path, payload: dict) -> None:
     metrics = payload["acoustic_metrics"]
     transcription = payload["transcription"]
+    transcription_quality = payload.get("transcription_quality", {})
     emotion = payload["emotion_summary"]
     status = payload["status"]
     debug = payload.get("emotion_debug", {})
@@ -69,6 +90,11 @@ def _print_summary(path: Path, payload: dict) -> None:
     print(f"transcription_status: {status['transcription_status']}")
     print(f"transcription_engine: {transcription.get('transcription_engine')}")
     print(f"transcription_model: {transcription.get('transcription_model')}")
+    print(f"transcription_language_used: {transcription_quality.get('language_used') or transcription.get('detected_language')}")
+    print(f"transcription_used_optimized_audio: {transcription_quality.get('used_optimized_audio')}")
+    print(f"transcription_avg_confidence: {transcription_quality.get('avg_segment_confidence')}")
+    print(f"transcription_low_confidence: {transcription_quality.get('low_confidence')}")
+    print(f"transcription_warnings: {transcription_quality.get('warnings') or []}")
     print(f"emotion_status: {status['emotion_status']}")
     print(f"emotion_analysis_source: {status.get('emotion_analysis_source')}")
     print(f"primary_emotion: {emotion.get('primary_emotion')}")
@@ -196,6 +222,11 @@ def main() -> int:
     print(f"Modo de IA externa: {'habilitado pela requisicao' if use_external_ai else 'desabilitado (--no-cohere)'}")
     results: dict[str, dict] = {}
     with TestClient(app) as client:
+        try:
+            protected_headers = _api_key_headers()
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         health_response = client.get("/health")
         if health_response.status_code != 200:
             raise RuntimeError(f"/health falhou: HTTP {health_response.status_code} - {health_response.text}")
@@ -205,7 +236,12 @@ def main() -> int:
         before_status = _get_system_status(client)
         _print_system_status("antes", before_status)
         for path in FIXTURES:
-            payload = _post_audio(client, path, use_external_ai=use_external_ai)
+            payload = _post_audio(
+                client,
+                path,
+                use_external_ai=use_external_ai,
+                headers=protected_headers,
+            )
             results[path.name] = payload
             _print_summary(path, payload)
         after_status = _get_system_status(client)

@@ -1,9 +1,17 @@
 from functools import lru_cache
+import inspect
 import math
+from pathlib import Path
 import re
 from typing import Any
 
-from app.api.schemas import AcousticMetrics, Transcription, TranscriptionSegment, TranscriptionWord
+from app.api.schemas import (
+    AcousticMetrics,
+    Transcription,
+    TranscriptionQuality,
+    TranscriptionSegment,
+    TranscriptionWord,
+)
 from app.core.config import Settings, get_settings
 from app.core.errors import TranscriptionError
 from app.services.audio_preprocessor import ProcessedAudio
@@ -11,8 +19,8 @@ from app.services.audio_preprocessor import ProcessedAudio
 WORD_PATTERN = re.compile(r"[\wÀ-ÿ']+", re.UNICODE)
 
 
-def _language_for_whisper(language: str) -> str:
-    normalized = language.strip().lower()
+def normalize_whisper_language(language: str | None) -> str:
+    normalized = (language or "").strip().lower().replace("_", "-")
     if normalized.startswith("pt"):
         return "pt"
     if "-" in normalized:
@@ -43,6 +51,87 @@ def _speech_rate_label(words_per_minute: float) -> str:
 
 def _word_attr(word: Any, name: str, default: Any = None) -> Any:
     return getattr(word, name, default)
+
+
+def _display_audio_path(path: str | None) -> str | None:
+    if not path:
+        return None
+    value = Path(path)
+    try:
+        return value.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return value.name
+
+
+def _transcribe_kwargs(model: Any, settings: Settings, language_used: str) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "language": language_used,
+        "word_timestamps": True,
+        "beam_size": settings.whisper_beam_size,
+        "best_of": settings.whisper_best_of,
+        "temperature": settings.whisper_temperature,
+        "vad_filter": settings.whisper_vad_filter,
+        "condition_on_previous_text": settings.whisper_condition_on_previous_text,
+    }
+    try:
+        supported = set(inspect.signature(model.transcribe).parameters)
+    except (TypeError, ValueError):
+        return kwargs
+    return {key: value for key, value in kwargs.items() if key in supported}
+
+
+def _average_confidence(transcription: Transcription) -> float | None:
+    segment_confidences = [
+        segment.confidence for segment in transcription.segments if segment.confidence is not None
+    ]
+    if segment_confidences:
+        return round(sum(segment_confidences) / len(segment_confidences), 3)
+
+    word_confidences = [word.confidence for word in transcription.words if word.confidence is not None]
+    if word_confidences:
+        return round(sum(word_confidences) / len(word_confidences), 3)
+
+    return None
+
+
+def build_transcription_quality(
+    *,
+    transcription: Transcription,
+    processed_audio: ProcessedAudio,
+    acoustic_metrics: AcousticMetrics,
+    language_used: str,
+    settings: Settings | None = None,
+) -> TranscriptionQuality:
+    settings = settings or get_settings()
+    avg_confidence = _average_confidence(transcription)
+    low_confidence = avg_confidence is not None and avg_confidence < 0.55
+    warnings: list[str] = []
+
+    if low_confidence:
+        warnings.append("Confiança média da transcrição baixa; revise o áudio ou use um modelo maior.")
+    if acoustic_metrics.silence_ratio >= 0.45 or acoustic_metrics.is_mostly_silent:
+        warnings.append("Silêncio/pausas em proporção alta podem reduzir a precisão da transcrição.")
+    if acoustic_metrics.peak_volume_db >= -1.0:
+        warnings.append("Pico próximo de 0 dB pode indicar clipping e prejudicar a transcrição.")
+    if acoustic_metrics.duration_seconds < 1.0:
+        warnings.append("Áudio muito curto; a transcrição pode ficar instável.")
+    if acoustic_metrics.audio_quality_warning:
+        warnings.append(acoustic_metrics.audio_quality_warning)
+    if processed_audio.transcription_fallback_reason:
+        warnings.append("Áudio otimizado para transcrição indisponível; WAV padrão foi usado.")
+
+    return TranscriptionQuality(
+        language_used=language_used,
+        engine=settings.local_transcription_engine,
+        model=settings.whisper_model_size,
+        used_optimized_audio=processed_audio.optimized_for_transcription,
+        audio_path=_display_audio_path(processed_audio.processed_path),
+        source_audio_path=_display_audio_path(processed_audio.transcription_source_path),
+        fallback_reason=processed_audio.transcription_fallback_reason,
+        avg_segment_confidence=avg_confidence,
+        low_confidence=low_confidence,
+        warnings=list(dict.fromkeys(warnings)),
+    )
 
 
 def build_transcription_from_segments(
@@ -174,17 +263,16 @@ def transcribe_audio(
     )
 
     try:
+        language_used = normalize_whisper_language(language)
         raw_segments, info = model.transcribe(
             processed_audio.processed_path,
-            language=_language_for_whisper(language),
-            word_timestamps=True,
-            beam_size=1,
+            **_transcribe_kwargs(model, settings, language_used),
         )
         segments = list(raw_segments)
     except Exception as exc:
         raise TranscriptionError() from exc
 
-    detected_language = getattr(info, "language", None) or _language_for_whisper(language)
+    detected_language = getattr(info, "language", None) or normalize_whisper_language(language)
     return build_transcription_from_segments(
         segments,
         audio_duration_seconds=acoustic_metrics.duration_seconds,

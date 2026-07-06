@@ -9,6 +9,7 @@ from app.api.schemas import (
     LearningContextResponse,
 )
 from app.core.config import get_settings
+from app.core.security import require_api_key
 from app.db.repository import (
     create_audio_analysis,
     find_similar_learning_examples,
@@ -19,12 +20,16 @@ from app.db.repository import (
 )
 from app.db.session import get_session
 from app.services.audio_metrics_service import calculate_acoustic_metrics
-from app.services.audio_preprocessor import standardize_audio
+from app.services.audio_preprocessor import optimize_audio_for_transcription, standardize_audio
 from app.services.audio_loader import save_upload_file
 from app.services.response_builder import build_analysis_response
-from app.services.transcription_service import transcribe_audio
+from app.services.transcription_service import (
+    build_transcription_quality,
+    normalize_whisper_language,
+    transcribe_audio,
+)
 
-router = APIRouter(prefix="/v1", tags=["audio"])
+router = APIRouter(prefix="/v1", tags=["audio"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/analyze-audio", response_model=AudioAnalysisResponse, status_code=201)
@@ -39,11 +44,20 @@ async def analyze_audio(
     stored_audio = await save_upload_file(file, settings)
     processed_audio = standardize_audio(stored_audio, settings)
     acoustic_metrics = calculate_acoustic_metrics(processed_audio, settings)
+    transcription_audio = optimize_audio_for_transcription(processed_audio, settings)
+    requested_language = language or settings.default_language
     transcription = transcribe_audio(
-        processed_audio,
+        transcription_audio,
         acoustic_metrics,
-        language or settings.default_language,
+        requested_language,
         settings,
+    )
+    transcription_quality = build_transcription_quality(
+        transcription=transcription,
+        processed_audio=transcription_audio,
+        acoustic_metrics=acoustic_metrics,
+        language_used=normalize_whisper_language(requested_language),
+        settings=settings,
     )
     learning_examples = (
         find_similar_learning_examples(
@@ -65,7 +79,8 @@ async def analyze_audio(
         stored_audio=stored_audio,
         acoustic_metrics=acoustic_metrics,
         transcription=transcription,
-        language=language or settings.default_language,
+        transcription_quality=transcription_quality,
+        language=requested_language,
         use_external_ai=use_external_ai,
         interpretation_style=interpretation_style,
         learning_examples=learning_examples,

@@ -89,6 +89,19 @@ class Transcription(BaseModel):
     average_word_duration_ms: float | None = None
 
 
+class TranscriptionQuality(BaseModel):
+    language_used: str
+    engine: str
+    model: str
+    used_optimized_audio: bool
+    audio_path: str | None = None
+    source_audio_path: str | None = None
+    fallback_reason: str | None = None
+    avg_segment_confidence: float | None = None
+    low_confidence: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AnnotatedTranscription(BaseModel):
     text: str
     annotation_style: str = "inline_brackets"
@@ -240,6 +253,7 @@ class AudioAnalysisResponse(BaseModel):
     status: ProcessingStatus
     acoustic_metrics: AcousticMetrics
     transcription: Transcription
+    transcription_quality: TranscriptionQuality
     annotated_transcription: AnnotatedTranscription
     prosody_summary: ProsodySummary
     emotion_summary: EmotionSummary

@@ -59,6 +59,22 @@ def _response_from_payload(payload: dict) -> AudioAnalysisResponse:
     transcription.setdefault("estimated_speech_rate_label", "normal")
     transcription.setdefault("average_word_duration_ms", None)
 
+    payload.setdefault(
+        "transcription_quality",
+        {
+            "language_used": transcription.get("detected_language", metadata.get("language", "pt-BR")),
+            "engine": transcription.get("transcription_engine", "unknown"),
+            "model": transcription.get("transcription_model", "unknown"),
+            "used_optimized_audio": False,
+            "audio_path": None,
+            "source_audio_path": None,
+            "fallback_reason": None,
+            "avg_segment_confidence": None,
+            "low_confidence": False,
+            "warnings": [],
+        },
+    )
+
     annotated = payload.setdefault("annotated_transcription", {})
     annotated.setdefault("analysis_source", payload["status"].get("emotion_analysis_source"))
 
