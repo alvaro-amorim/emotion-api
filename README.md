@@ -1,5 +1,14 @@
 # Audio Emotion API
 
+## Como avaliar este projeto
+
+- **Papel:** backend experimental do ecossistema; o [cliente de demonstração](https://github.com/alvaro-amorim/audio-emotion-client-demo) é um consumidor separado.
+- **Decisões:** transcrição e métricas são processadas localmente; a interpretação combina heurísticas e LLM opcional, com fallback explícito.
+- **Limite:** não há treinamento de um modelo próprio de reconhecimento emocional nem garantia clínica para as interpretações.
+- **Contrato:** veja [docs/API_CONTRACT.md](docs/API_CONTRACT.md). A seção **Testes** descreve a execução automatizada e as fixtures reais opcionais.
+
+Para avaliação sem chamadas externas, use `USE_COHERE=false`. A transcrição local ainda pode precisar baixar o modelo na primeira execução.
+
 API **local-first** em Python para receber arquivos de áudio, transcrever fala, extrair métricas acústicas, interpretar sinais emocionais e gerar um contexto pronto para ser usado por outros agentes de IA.
 
 > Este projeto é um MVP experimental. A análise emocional é interpretativa e probabilística; não deve ser tratada como diagnóstico psicológico, clínico ou verdade absoluta.
